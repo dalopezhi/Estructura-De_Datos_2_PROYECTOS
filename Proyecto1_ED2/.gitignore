@@ -1,0 +1,12 @@
+# NetBeans user-specific private settings
+nbproject/private/
+nbproject/project.properties~
+nbproject/genfiles.properties
+
+# Ant build and distribution outputs
+build/
+dist/
+
+# OS-specific temporary files
+.DS_Store
+Thumbs.db
