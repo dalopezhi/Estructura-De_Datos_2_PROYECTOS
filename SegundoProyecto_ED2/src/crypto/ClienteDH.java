@@ -2,50 +2,48 @@ package crypto;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.IOException;
-import java.math.BigInteger;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.security.KeyPair;
+import java.security.PublicKey;
 
 import storage.Configuracion;
 
 public class ClienteDH {
 
     private static final int PUERTO = 5050;
-    private static final int TIMEOUT = 5000;
+    private static final int TIMEOUT = 10000;
 
-    public BigInteger conectar() {
+    public boolean conectar() {
 
-        Configuracion configuracion = new Configuracion();
+        Configuracion configuracion =
+                new Configuracion();
 
         if (!configuracion.cargar()) {
-            System.out.println(
-                    "No se pudo cargar la configuracion.");
-            return null;
+            return false;
         }
 
-        String ruta = configuracion.getRutaServidor();
-
-        String servidor = extraerServidor(ruta);
+        String servidor = extraerServidor(
+                configuracion.getRutaServidor());
 
         if (servidor == null) {
+
             System.out.println(
-                    "Ruta del servidor invalida: " + ruta);
-            return null;
+                    "Ruta del servidor invalida.");
+
+            return false;
         }
 
         return conectar(servidor);
     }
 
-    // Se conserva para permitir conexiones directas
-    // cuando sea necesario realizar pruebas.
-
-    public BigInteger conectar(String servidor) {
+    public boolean conectar(String servidor) {
 
         try (Socket socket = new Socket()) {
 
             socket.connect(
-                    new InetSocketAddress(servidor, PUERTO),
+                    new InetSocketAddress(
+                            servidor, PUERTO),
                     TIMEOUT);
 
             socket.setSoTimeout(TIMEOUT);
@@ -58,43 +56,77 @@ public class ClienteDH {
                     new DataOutputStream(
                             socket.getOutputStream());
 
-            DiffieHellman dh = new DiffieHellman();
+            // Generar claves DH del cliente.
+            KeyPair clavesCliente =
+                    DiffieHellmanSeguro.generarClaves();
 
-            BigInteger privadoCliente =
-                    dh.generarPrivado();
+            byte[] publicaCliente =
+                    clavesCliente.getPublic().getEncoded();
 
-            BigInteger publicoCliente =
-                    dh.calcularPublico(privadoCliente);
-
-            BigInteger publicoServidor =
-                    new BigInteger(entrada.readUTF());
-
-            salida.writeUTF(publicoCliente.toString());
+            salida.writeInt(publicaCliente.length);
+            salida.write(publicaCliente);
             salida.flush();
 
-            BigInteger secretoCliente =
-                    dh.calcularSecreto(
-                            publicoServidor,
-                            privadoCliente);
+            // Recibir clave publica del servidor.
+            int longitud = entrada.readInt();
+
+            if (longitud <= 0 || longitud > 8192) {
+                throw new IllegalArgumentException(
+                        "Longitud de clave invalida.");
+            }
+
+            byte[] datosServidor =
+                    new byte[longitud];
+
+            entrada.readFully(datosServidor);
+
+            PublicKey publicaServidor =
+                    DiffieHellmanSeguro.reconstruirPublica(
+                            datosServidor);
+
+            // Calcular secreto compartido.
+            byte[] secreto =
+                    DiffieHellmanSeguro.calcularSecreto(
+                            clavesCliente,
+                            publicaServidor);
+
+            CanalCifrado canal =
+                    new CanalCifrado(secreto);
+
+            // Enviar mensaje cifrado.
+            String mensaje =
+                    "Hola servidor, soy Biblioteca Digital.";
+
+            String cifrado =
+                    canal.cifrar(mensaje);
+
+            salida.writeUTF(cifrado);
+            salida.flush();
 
             System.out.println(
-                    "Intercambio DH completado con "
-                    + servidor);
+                    "Mensaje enviado cifrado.");
+
+            // Recibir respuesta cifrada.
+            String respuestaCifrada =
+                    entrada.readUTF();
+
+            String respuesta =
+                    canal.descifrar(
+                            respuestaCifrada);
 
             System.out.println(
-                    "Secreto calculado: "
-                    + secretoCliente);
+                    "Respuesta del servidor: "
+                    + respuesta);
 
-            return secretoCliente;
+            return true;
 
-        } catch (IOException
-                | IllegalArgumentException error) {
+        } catch (Exception error) {
 
             System.out.println(
-                    "Error en intercambio DH: "
+                    "Error de conexion cifrada: "
                     + error.getMessage());
 
-            return null;
+            return false;
         }
     }
 
@@ -118,11 +150,10 @@ public class ClienteDH {
             return null;
         }
 
-        String servidor = restante.substring(
-                0, separador).trim();
+        String servidor =
+                restante.substring(0, separador).trim();
 
-        return servidor.isEmpty() ? null : servidor;
+        return servidor.isEmpty()
+                ? null : servidor;
     }
 }
-
-

@@ -1,12 +1,15 @@
+
 package servidor;
 
-import crypto.DiffieHellman;
+import crypto.CanalCifrado;
+import crypto.DiffieHellmanSeguro;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.IOException;
-import java.math.BigInteger;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.KeyPair;
+import java.security.PublicKey;
 
 public class ServidorDH {
 
@@ -14,76 +17,109 @@ public class ServidorDH {
 
     public static void main(String[] args) {
 
-        System.out.println("=== SERVIDOR DIFFIE-HELLMAN ===");
+        System.out.println(
+                "=== SERVIDOR DH + TRIPLE DES ===");
 
         try (ServerSocket servidor =
                 new ServerSocket(PUERTO)) {
 
             System.out.println(
-                    "Servidor escuchando en puerto " + PUERTO);
+                    "Escuchando en puerto " + PUERTO);
 
             while (true) {
 
-                try (Socket cliente = servidor.accept()) {
+                try (Socket socket =
+                        servidor.accept()) {
 
-                    System.out.println(
-                            "\nCliente conectado: "
-                            + cliente.getInetAddress());
-
-                    atenderCliente(cliente);
+                    atenderCliente(socket);
 
                 } catch (Exception error) {
 
                     System.out.println(
-                            "Error con cliente: "
-                            + error.getMessage());
+                            "Error: " + error.getMessage());
                 }
             }
 
-        } catch (IOException error) {
+        } catch (Exception error) {
 
             System.out.println(
-                    "No se pudo iniciar el servidor: "
+                    "Error del servidor: "
                     + error.getMessage());
         }
     }
 
     private static void atenderCliente(Socket socket)
-            throws IOException {
+            throws Exception {
 
         socket.setSoTimeout(10000);
 
         DataInputStream entrada =
-                new DataInputStream(socket.getInputStream());
+                new DataInputStream(
+                        socket.getInputStream());
 
         DataOutputStream salida =
-                new DataOutputStream(socket.getOutputStream());
+                new DataOutputStream(
+                        socket.getOutputStream());
 
-        DiffieHellman dh = new DiffieHellman();
+        System.out.println(
+                "\nCliente conectado: "
+                + socket.getInetAddress());
 
-        BigInteger privadoServidor = dh.generarPrivado();
+        // Recibir clave publica del cliente.
+        int longitud = entrada.readInt();
 
-        BigInteger publicoServidor =
-                dh.calcularPublico(privadoServidor);
+        if (longitud <= 0 || longitud > 8192) {
+            throw new IllegalArgumentException(
+                    "Longitud de clave invalida.");
+        }
 
-        // Enviar la clave publica del servidor.
-        salida.writeUTF(publicoServidor.toString());
+        byte[] datosCliente =
+                new byte[longitud];
+
+        entrada.readFully(datosCliente);
+
+        PublicKey publicaCliente =
+                DiffieHellmanSeguro.reconstruirPublica(
+                        datosCliente);
+
+        // Generar claves compatibles.
+        KeyPair clavesServidor =
+                DiffieHellmanSeguro.generarClaves(
+                        publicaCliente);
+
+        byte[] publicaServidor =
+                clavesServidor.getPublic().getEncoded();
+
+        salida.writeInt(publicaServidor.length);
+        salida.write(publicaServidor);
         salida.flush();
 
-        // Recibir la clave publica del cliente.
-        BigInteger publicoCliente =
-                new BigInteger(entrada.readUTF());
+        // Obtener secreto compartido.
+        byte[] secreto =
+                DiffieHellmanSeguro.calcularSecreto(
+                        clavesServidor,
+                        publicaCliente);
 
-        // Calcular secreto compartido.
-        BigInteger secretoServidor =
-                dh.calcularSecreto(
-                        publicoCliente, privadoServidor);
+        CanalCifrado canal =
+                new CanalCifrado(secreto);
+
+        // Recibir y descifrar mensaje.
+        String mensajeCifrado =
+                entrada.readUTF();
+
+        String mensajeOriginal =
+                canal.descifrar(mensajeCifrado);
 
         System.out.println(
-                "Intercambio DH completado.");
+                "Mensaje recibido y descifrado: "
+                + mensajeOriginal);
 
-        System.out.println(
-                "Secreto calculado: " + secretoServidor);
+        // Responder cifrado.
+        String respuesta =
+                canal.cifrar(
+                        "Mensaje recibido correctamente.");
+
+        salida.writeUTF(respuesta);
+        salida.flush();
     }
 }
-

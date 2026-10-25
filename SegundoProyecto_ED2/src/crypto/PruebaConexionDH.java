@@ -1,24 +1,22 @@
 package crypto;
 
-import java.math.BigInteger;
-
 public class PruebaConexionDH {
 
     public static void main(String[] args) {
 
         ClienteDH cliente = new ClienteDH();
 
-        BigInteger secreto = cliente.conectar();
+        boolean correcto = cliente.conectar();
 
-        if (secreto != null) {
+        if (correcto) {
 
             System.out.println(
-                    "Conexion e intercambio exitosos.");
+                    "Prueba DH + Triple DES exitosa.");
 
         } else {
 
             System.out.println(
-                    "No se completo el intercambio.");
+                    "Prueba fallida.");
         }
     }
 }
