@@ -131,7 +131,9 @@ public class Aplicacion {
 
             try {
 
-                AccesoOffline.guardar(usuario);
+                AccesoOffline.guardar(
+                    usuario.getNombreUsuario(),
+                    contrasena);
 
                 System.out.println(
                         "Acceso offline habilitado en esta computadora.");
@@ -174,7 +176,7 @@ public class Aplicacion {
         System.out.println(
                 "Acceso offline Premium autorizado.");
 
-        mostrarLecturaLocal();
+        mostrarLecturaLocal(nombreUsuario);
     }
 
     // ==========================================
@@ -212,7 +214,7 @@ public class Aplicacion {
                 case 2:
 
                     if (usuario.isPremium()) {
-                        mostrarLecturaLocal();
+                        mostrarLecturaLocal(usuario.getNombreUsuario());
                     } else {
                         System.out.println(
                                 "Opcion no disponible.");
@@ -314,7 +316,9 @@ public class Aplicacion {
                     case 2:
 
                         libroService.descargarLibro(
-                                libro, rutaLibro);
+                            libro,
+                            rutaLibro,
+                            sesion.getUsuarioActual().getNombreUsuario());
                         break;
 
                     case 0:
@@ -340,10 +344,10 @@ public class Aplicacion {
     // LECTURA DE LIBROS DESCARGADOS
     // ==========================================
 
-    private void mostrarLecturaLocal() {
+    private void mostrarLecturaLocal(String nombreUsuario) {
 
         File[] librosDescargados =
-                libroService.obtenerLibrosDescargados();
+                libroService.obtenerLibrosDescargados(nombreUsuario);
 
         if (librosDescargados == null
                 || librosDescargados.length == 0) {
@@ -397,7 +401,7 @@ public class Aplicacion {
 
             Libro libro = new Libro(isbn, isbn);
 
-            libroService.leerLibroLocal(libro);
+            libroService.leerLibroLocal(libro, nombreUsuario);
         }
     }
 }

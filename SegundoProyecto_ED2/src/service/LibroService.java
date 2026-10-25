@@ -12,6 +12,20 @@ import java.io.File;
 public class LibroService {
 
     private ArchivoService archivos = new ArchivoService();
+    
+    
+    private File carpetaUsuario(String nombreUsuario) {
+
+        if (nombreUsuario == null
+                || !nombreUsuario.matches("[a-zA-Z0-9_-]+")) {
+
+            throw new IllegalArgumentException(
+                    "Nombre de usuario invalido.");
+        }
+
+        return new File("data/descargas", nombreUsuario);
+    }
+
 
     public String obtenerLibroCifrado(Libro libro, String rutaServidor) {
 
@@ -59,7 +73,10 @@ public class LibroService {
     }
     
     
-    public boolean descargarLibro(Libro libro, String rutaLibro) {
+    public boolean descargarLibro(
+        Libro libro,
+        String rutaLibro,
+        String nombreUsuario) {
 
         File temporal = null;
 
@@ -74,7 +91,7 @@ public class LibroService {
             String contenido = cifrado.descifrarArchivo(
                     rutaLibro, secreto);
 
-            File carpeta = new File("data/descargas");
+            File carpeta = carpetaUsuario(nombreUsuario);
 
             if (!carpeta.exists() && !carpeta.mkdirs()) {
                 System.out.println("No se pudo crear la carpeta.");
@@ -148,12 +165,13 @@ public class LibroService {
         }
     }
 
-    public void leerLibroLocal(Libro libro) {
+    public void leerLibroLocal(
+        Libro libro, String nombreUsuario) {
 
         try {
             String ruta = new File(
-                    "data/descargas",
-                    libro.getIsbn() + ".txt").getPath();
+                carpetaUsuario(nombreUsuario),
+                libro.getIsbn() + ".txt").getPath();
 
             if (!new File(ruta).isFile()) {
                 System.out.println("El libro no esta descargado.");
@@ -172,22 +190,31 @@ public class LibroService {
         }
     }
         
-    public File[] obtenerLibrosDescargados() {
+    
+    public File[] obtenerLibrosDescargados(
+            String nombreUsuario) {
 
-        File carpeta = new File("data/descargas");
+        File carpeta = carpetaUsuario(nombreUsuario);
 
-        if (!carpeta.exists() || !carpeta.isDirectory()) {
+        if (!carpeta.isDirectory()) {
             return new File[0];
         }
 
-        File[] archivos = carpeta.listFiles(
-                (directorio, nombre) -> nombre.endsWith(".txt"));
+        File[] libros = carpeta.listFiles(
+                (directorio, nombre) ->
+                        nombre.endsWith(".txt")
+                        && new File(directorio, nombre).isFile());
 
-        if (archivos == null) {
+        if (libros == null) {
             return new File[0];
         }
 
-        return archivos;
+        java.util.Arrays.sort(
+                libros,
+                java.util.Comparator.comparing(File::getName));
+
+        return libros;
     }
+
 }
 
