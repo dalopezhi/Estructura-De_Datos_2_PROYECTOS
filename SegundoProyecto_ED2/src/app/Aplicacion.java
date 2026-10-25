@@ -1,23 +1,84 @@
 package app;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Scanner;
-import service.LibroService;
+
 import model.Libro;
 import model.Sesion;
 import model.Usuario;
+
 import service.AuthService;
 import service.CatalogoService;
+import service.LibroService;
+
+import storage.AccesoOffline;
 import storage.Configuracion;
-import java.io.File;
 
 public class Aplicacion {
 
-    private Scanner entrada = new Scanner(System.in);
-    private Sesion sesion = new Sesion();
-    private LibroService libroService = new LibroService();
+    private final Scanner entrada = new Scanner(System.in);
+    private final Sesion sesion = new Sesion();
+    private final LibroService libroService = new LibroService();
+
     private String rutaServidor;
 
+    // ==========================================
+    // INICIO DE LA APLICACION
+    // ==========================================
+
     public void iniciar() {
+
+        while (true) {
+
+            System.out.println("\n=== BIBLIOTECA DIGITAL ===");
+            System.out.println("1. Iniciar sesion en linea");
+            System.out.println("2. Leer libros descargados (offline)");
+            System.out.println("3. Salir");
+            System.out.print("Opcion: ");
+
+            int opcion = leerOpcion();
+
+            switch (opcion) {
+
+                case 1:
+                    iniciarOnline();
+                    break;
+
+                case 2:
+                    iniciarOffline();
+                    break;
+
+                case 3:
+                    System.out.println("Hasta pronto.");
+                    return;
+
+                default:
+                    System.out.println("Opcion no valida.");
+            }
+        }
+    }
+
+    // ==========================================
+    // LECTURA SEGURA DE OPCIONES
+    // ==========================================
+
+    private int leerOpcion() {
+
+        try {
+            return Integer.parseInt(
+                    entrada.nextLine().trim());
+
+        } catch (NumberFormatException error) {
+            return -1;
+        }
+    }
+
+    // ==========================================
+    // INICIO DE SESION ONLINE
+    // ==========================================
+
+    private void iniciarOnline() {
 
         Configuracion configuracion = new Configuracion();
 
@@ -27,94 +88,162 @@ public class Aplicacion {
 
         rutaServidor = configuracion.getRutaServidor();
 
-        CatalogoService catalogo = new CatalogoService();
+        File carpetaServidor = new File(rutaServidor);
+
+        if (!carpetaServidor.isDirectory()) {
+
+            System.out.println(
+                    "No se pudo acceder al servidor.");
+
+            return;
+        }
+
         AuthService autenticacion = new AuthService();
 
-        boolean programaActivo = true;
+        System.out.println("\n=== INICIO DE SESION ===");
 
-        while (programaActivo) {
+        System.out.print("Usuario: ");
+        String nombreUsuario = entrada.nextLine().trim();
 
-            System.out.println("\n=== INICIO DE SESION ===");
+        System.out.print("Contrasena: ");
+        String contrasena = entrada.nextLine();
 
-            System.out.print("Usuario: ");
-            String nombreUsuario = entrada.nextLine().trim();
+        Usuario usuario = autenticacion.iniciarSesion(
+                nombreUsuario, contrasena, rutaServidor);
 
-            System.out.print("Contraseña: ");
-            String contraseña = entrada.nextLine();
+        if (usuario == null) {
+            return;
+        }
 
-            Usuario usuario = autenticacion.iniciarSesion(
-                    nombreUsuario, contraseña, rutaServidor);
+        sesion.iniciarSesion(usuario);
 
-            if (usuario == null) {
-                continue;
+        System.out.println("\nBienvenido, "
+                + usuario.getNombreUsuario());
+
+        System.out.println("Cuenta: "
+                + (usuario.isPremium()
+                        ? "Premium" : "Estandar"));
+
+        // Guardar acceso local solo si el servidor
+        // autentico correctamente al usuario Premium.
+
+        if (usuario.isPremium()) {
+
+            try {
+
+                AccesoOffline.guardar(usuario);
+
+                System.out.println(
+                        "Acceso offline habilitado en esta computadora.");
+
+            } catch (IOException error) {
+
+                System.out.println(
+                        "No se pudo guardar el acceso offline.");
+            }
+        }
+
+        CatalogoService catalogo = new CatalogoService();
+
+        mostrarMenuPrincipal(catalogo, usuario);
+    }
+
+    // ==========================================
+    // INICIO DE SESION OFFLINE
+    // ==========================================
+
+    private void iniciarOffline() {
+
+        System.out.println("\n=== LECTURA OFFLINE PREMIUM ===");
+
+        System.out.print("Usuario: ");
+        String nombreUsuario = entrada.nextLine().trim();
+
+        System.out.print("Contrasena: ");
+        String contrasena = entrada.nextLine();
+
+        if (!AccesoOffline.validar(
+                nombreUsuario, contrasena)) {
+
+            System.out.println(
+                    "Acceso offline no autorizado.");
+
+            return;
+        }
+
+        System.out.println(
+                "Acceso offline Premium autorizado.");
+
+        mostrarLecturaLocal();
+    }
+
+    // ==========================================
+    // MENU PRINCIPAL ONLINE
+    // ==========================================
+
+    private void mostrarMenuPrincipal(
+            CatalogoService catalogo, Usuario usuario) {
+
+        while (sesion.estaActiva()) {
+
+            System.out.println("\n=== MENU PRINCIPAL ===");
+            System.out.println("1. Explorar catalogo");
+
+            if (usuario.isPremium()) {
+                System.out.println("2. Lectura local");
             }
 
-            sesion.iniciarSesion(usuario);
+            System.out.println("3. Cerrar sesion");
+            System.out.println("4. Regresar al inicio");
+            System.out.print("Opcion: ");
 
-            System.out.println("\nBienvenido, "
-                    + usuario.getNombreUsuario());
+            int opcion = leerOpcion();
 
-            System.out.println("Cuenta: "
-                    + (usuario.isPremium() ? "Premium" : "Estandar"));
+            switch (opcion) {
 
-            int opcion = -1;
+                case 1:
 
-            while (sesion.estaActiva() && programaActivo) {
+                    if (catalogo.cargar(rutaServidor)) {
+                        explorarCatalogo(catalogo);
+                    }
 
-                System.out.println("\n=== MENU PRINCIPAL ===");
-                System.out.println("1. Explorar catalogo");
+                    break;
 
-                if (usuario.isPremium()) {
-                    System.out.println("2. Lectura local");
-                }
+                case 2:
 
-                System.out.println("3. Cerrar sesion");
-                System.out.println("4. Salir");
-                System.out.print("Opcion: ");
-
-                try {
-                    opcion = Integer.parseInt(
-                            entrada.nextLine().trim());
-                } catch (NumberFormatException error) {
-                    System.out.println("Ingrese un numero valido.");
-                    continue;
-                }
-
-                switch (opcion) {
-
-                    case 1:
-                        if (catalogo.cargar(rutaServidor)) {
-                            explorarCatalogo(catalogo);
-                        }
-                        break;
-
-                    case 2:
                     if (usuario.isPremium()) {
                         mostrarLecturaLocal();
                     } else {
-                        System.out.println("Opcion no disponible.");
+                        System.out.println(
+                                "Opcion no disponible.");
                     }
+
                     break;
 
-                    case 3:
-                        sesion.cerrarSesion();
-                        System.out.println("Sesion cerrada.");
-                        break;
+                case 3:
 
-                    case 4:
-                        sesion.cerrarSesion();
-                        programaActivo = false;
-                        System.out.println("Hasta pronto.");
-                        break;
+                    sesion.cerrarSesion();
+                    System.out.println("Sesion cerrada.");
+                    return;
 
-                    default:
-                        System.out.println("Opcion no valida.");
-                }
+                case 4:
+
+                    sesion.cerrarSesion();
+                    return;
+
+                default:
+
+                    System.out.println("Opcion no valida.");
             }
         }
     }
 
-    private void explorarCatalogo(CatalogoService catalogo) {
+    // ==========================================
+    // EXPLORAR CATALOGO
+    // ==========================================
+
+    private void explorarCatalogo(
+            CatalogoService catalogo) {
 
         while (true) {
 
@@ -123,116 +252,146 @@ public class Aplicacion {
             System.out.println("\n0. Regresar");
             System.out.print("Seleccione un libro: ");
 
-            int opcion;
-
-            try {
-                opcion = Integer.parseInt(
-                        entrada.nextLine().trim());
-            } catch (NumberFormatException error) {
-                System.out.println("Ingrese un numero valido.");
-                continue;
-            }
+            int opcion = leerOpcion();
 
             if (opcion == 0) {
                 return;
             }
-            
-            Libro libro = catalogo.obtenerLibro(opcion - 1);
-            
-            // Verificar que el libro exista
+
+            Libro libro = catalogo.obtenerLibro(
+                    opcion - 1);
+
             if (libro == null) {
-                System.out.println("Opcion invalida. Seleccione un libro del catalogo.");
+
+                System.out.println(
+                        "Opcion invalida. Seleccione un libro del catalogo.");
+
                 continue;
             }
 
-            // Mostrar el libro seleccionado
             System.out.println("\nLibro seleccionado:");
             System.out.println("ISBN: " + libro.getIsbn());
             System.out.println("Titulo: " + libro.getTitulo());
 
-            // Transferir solamente si el libro existe
-            String rutaLibro = libroService.obtenerLibroCifrado(
-                    libro, rutaServidor);
+            // Transferir el archivo cifrado
+            // desde el servidor hacia el cliente.
+
+            String rutaLibro =
+                    libroService.obtenerLibroCifrado(
+                            libro, rutaServidor);
 
             if (rutaLibro == null) {
-                System.out.println("No fue posible obtener el libro.");
+
+                System.out.println(
+                        "No fue posible obtener el libro.");
+
                 continue;
             }
-            
-            System.out.println("Copia cifrada guardada en: " + rutaLibro);
 
-            
+            System.out.println(
+                    "Copia cifrada guardada en: "
+                    + rutaLibro);
+
+            // Los usuarios Premium pueden leer
+            // o descargar el libro comprimido.
+
             if (sesion.getUsuarioActual().isPremium()) {
 
                 System.out.println("\n1. Leer en linea");
                 System.out.println("2. Descargar");
+                System.out.println("0. Regresar");
                 System.out.print("Opcion: ");
 
-                String opcionLibro = entrada.nextLine().trim();
+                int opcionLibro = leerOpcion();
 
                 switch (opcionLibro) {
 
-                    case "1":
+                    case 1:
+
                         libroService.leerLibro(rutaLibro);
                         break;
 
-                    case "2":
-                        libroService.descargarLibro(libro, rutaLibro);
+                    case 2:
+
+                        libroService.descargarLibro(
+                                libro, rutaLibro);
+                        break;
+
+                    case 0:
                         break;
 
                     default:
-                        System.out.println("Opcion no valida.");
+
+                        System.out.println(
+                                "Opcion no valida.");
                 }
 
             } else {
+
+                // Los usuarios estandar solamente
+                // pueden leer el libro en linea.
 
                 libroService.leerLibro(rutaLibro);
             }
         }
     }
-    
+
+    // ==========================================
+    // LECTURA DE LIBROS DESCARGADOS
+    // ==========================================
+
     private void mostrarLecturaLocal() {
 
-        File[] librosDescargados = libroService.obtenerLibrosDescargados();
+        File[] librosDescargados =
+                libroService.obtenerLibrosDescargados();
 
-        if (librosDescargados.length == 0) {
-            System.out.println("No hay libros descargados.");
+        if (librosDescargados == null
+                || librosDescargados.length == 0) {
+
+            System.out.println(
+                    "No hay libros descargados.");
+
             return;
         }
 
         while (true) {
 
-            System.out.println("\n=== LIBROS DESCARGADOS ===");
+            System.out.println(
+                    "\n=== LIBROS DESCARGADOS ===");
 
-            for (int i = 0; i < librosDescargados.length; i++) {
-                System.out.println((i + 1) + ". "
+            for (int i = 0;
+                    i < librosDescargados.length; i++) {
+
+                System.out.println(
+                        (i + 1) + ". "
                         + librosDescargados[i].getName());
             }
 
             System.out.println("0. Regresar");
             System.out.print("Seleccione un libro: ");
 
-            int opcion;
-
-            try {
-                opcion = Integer.parseInt(entrada.nextLine().trim());
-            } catch (NumberFormatException error) {
-                System.out.println("Ingrese un numero valido.");
-                continue;
-            }
+            int opcion = leerOpcion();
 
             if (opcion == 0) {
                 return;
             }
 
-            if (opcion < 1 || opcion > librosDescargados.length) {
-                System.out.println("Opcion invalida.");
+            if (opcion < 1
+                    || opcion > librosDescargados.length) {
+
+                System.out.println(
+                        "Opcion invalida.");
+
                 continue;
             }
 
             File archivo = librosDescargados[opcion - 1];
 
             String nombreArchivo = archivo.getName();
+
+            // Eliminar la extension .txt
+            // para recuperar el ISBN.
+
             String isbn = nombreArchivo.substring(
                     0, nombreArchivo.length() - 4);
 
@@ -241,6 +400,5 @@ public class Aplicacion {
             libroService.leerLibroLocal(libro);
         }
     }
-
 }
 
