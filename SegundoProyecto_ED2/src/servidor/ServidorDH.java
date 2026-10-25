@@ -3,13 +3,16 @@ package servidor;
 
 import crypto.CanalCifrado;
 import crypto.DiffieHellmanSeguro;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.KeyPair;
 import java.security.PublicKey;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class ServidorDH {
 
@@ -111,15 +114,45 @@ public class ServidorDH {
                 canal.descifrar(mensajeCifrado);
 
         System.out.println(
-                "Mensaje recibido y descifrado: "
-                + mensajeOriginal);
+        "Solicitud recibida: " + mensajeOriginal);
 
-        // Responder cifrado.
-        String respuesta =
-                canal.cifrar(
-                        "Mensaje recibido correctamente.");
+        String textoRespuesta;
+
+        if (mensajeOriginal.equals("ESTADO")) {
+
+            Path rutaCatalogo = Paths.get(
+                    "C:\\BibliotecaServidor\\catalogo.txt");
+
+            File archivoCatalogo = rutaCatalogo.toFile();
+
+            if (archivoCatalogo.isFile()) {
+
+                long registros = Files.lines(rutaCatalogo)
+                        .filter(linea -> !linea.trim().isEmpty())
+                        .count();
+
+                textoRespuesta =
+                        "Servidor activo. Registros del catalogo: "
+                        + registros;
+
+            } else {
+
+                textoRespuesta =
+                        "Servidor activo, pero no se encontro el catalogo.";
+            }
+
+        } else {
+
+            textoRespuesta = "Solicitud no reconocida.";
+        }
+
+        // Enviar respuesta cifrada.
+        String respuesta = canal.cifrar(textoRespuesta);
 
         salida.writeUTF(respuesta);
         salida.flush();
+
+        System.out.println(
+                "Respuesta cifrada enviada al cliente.");
     }
 }

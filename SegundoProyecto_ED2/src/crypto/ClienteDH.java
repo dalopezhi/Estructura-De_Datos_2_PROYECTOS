@@ -94,11 +94,9 @@ public class ClienteDH {
                     new CanalCifrado(secreto);
 
             // Enviar mensaje cifrado.
-            String mensaje =
-                    "Hola servidor, soy Biblioteca Digital.";
+            String mensaje = "ESTADO";
 
-            String cifrado =
-                    canal.cifrar(mensaje);
+            String cifrado = canal.cifrar(mensaje);
 
             salida.writeUTF(cifrado);
             salida.flush();
