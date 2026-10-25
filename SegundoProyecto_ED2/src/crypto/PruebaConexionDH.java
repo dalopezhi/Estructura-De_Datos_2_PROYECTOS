@@ -1,20 +1,14 @@
 package crypto;
 
 import java.math.BigInteger;
-import java.util.Scanner;
 
 public class PruebaConexionDH {
 
     public static void main(String[] args) {
 
-        Scanner entrada = new Scanner(System.in);
-
-        System.out.print("IP del servidor: ");
-        String ip = entrada.nextLine().trim();
-
         ClienteDH cliente = new ClienteDH();
 
-        BigInteger secreto = cliente.conectar(ip);
+        BigInteger secreto = cliente.conectar();
 
         if (secreto != null) {
 
@@ -28,3 +22,4 @@ public class PruebaConexionDH {
         }
     }
 }
+

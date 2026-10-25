@@ -4,53 +4,91 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+
+import storage.Configuracion;
 
 public class ClienteDH {
 
-    public BigInteger conectar(String ipServidor) {
+    private static final int PUERTO = 5050;
+    private static final int TIMEOUT = 5000;
 
-        try (Socket socket =
-                new Socket(ipServidor, 5050)) {
+    public BigInteger conectar() {
 
-            socket.setSoTimeout(10000);
+        Configuracion configuracion = new Configuracion();
+
+        if (!configuracion.cargar()) {
+            System.out.println(
+                    "No se pudo cargar la configuracion.");
+            return null;
+        }
+
+        String ruta = configuracion.getRutaServidor();
+
+        String servidor = extraerServidor(ruta);
+
+        if (servidor == null) {
+            System.out.println(
+                    "Ruta del servidor invalida: " + ruta);
+            return null;
+        }
+
+        return conectar(servidor);
+    }
+
+    // Se conserva para permitir conexiones directas
+    // cuando sea necesario realizar pruebas.
+
+    public BigInteger conectar(String servidor) {
+
+        try (Socket socket = new Socket()) {
+
+            socket.connect(
+                    new InetSocketAddress(servidor, PUERTO),
+                    TIMEOUT);
+
+            socket.setSoTimeout(TIMEOUT);
 
             DataInputStream entrada =
-                    new DataInputStream(socket.getInputStream());
+                    new DataInputStream(
+                            socket.getInputStream());
 
             DataOutputStream salida =
-                    new DataOutputStream(socket.getOutputStream());
+                    new DataOutputStream(
+                            socket.getOutputStream());
 
             DiffieHellman dh = new DiffieHellman();
 
-            // Generar claves del cliente.
-            BigInteger privadoCliente = dh.generarPrivado();
+            BigInteger privadoCliente =
+                    dh.generarPrivado();
 
             BigInteger publicoCliente =
                     dh.calcularPublico(privadoCliente);
 
-            // Recibir clave publica del servidor.
             BigInteger publicoServidor =
                     new BigInteger(entrada.readUTF());
 
-            // Enviar clave publica del cliente.
             salida.writeUTF(publicoCliente.toString());
             salida.flush();
 
-            // Calcular secreto compartido.
             BigInteger secretoCliente =
                     dh.calcularSecreto(
-                            publicoServidor, privadoCliente);
+                            publicoServidor,
+                            privadoCliente);
 
             System.out.println(
-                    "Intercambio DH completado.");
+                    "Intercambio DH completado con "
+                    + servidor);
 
             System.out.println(
-                    "Secreto calculado: " + secretoCliente);
+                    "Secreto calculado: "
+                    + secretoCliente);
 
             return secretoCliente;
 
-        } catch (IOException | IllegalArgumentException error) {
+        } catch (IOException
+                | IllegalArgumentException error) {
 
             System.out.println(
                     "Error en intercambio DH: "
@@ -59,5 +97,32 @@ public class ClienteDH {
             return null;
         }
     }
+
+    private String extraerServidor(String ruta) {
+
+        if (ruta == null) {
+            return null;
+        }
+
+        ruta = ruta.trim().replace('/', '\\');
+
+        if (!ruta.startsWith("\\\\")) {
+            return null;
+        }
+
+        String restante = ruta.substring(2);
+
+        int separador = restante.indexOf('\\');
+
+        if (separador <= 0) {
+            return null;
+        }
+
+        String servidor = restante.substring(
+                0, separador).trim();
+
+        return servidor.isEmpty() ? null : servidor;
+    }
 }
+
 
