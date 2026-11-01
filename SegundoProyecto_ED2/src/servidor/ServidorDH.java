@@ -127,9 +127,15 @@ public class ServidorDH {
 
             if (archivoCatalogo.isFile()) {
 
-                long registros = Files.lines(rutaCatalogo)
-                        .filter(linea -> !linea.trim().isEmpty())
-                        .count();
+                long registros;
+
+                try (java.util.stream.Stream<String> lineas =
+                        Files.lines(rutaCatalogo)) {
+
+                    registros = lineas
+                            .filter(linea -> !linea.trim().isEmpty())
+                            .count();
+                }
 
                 textoRespuesta =
                         "Servidor activo. Registros del catalogo: "

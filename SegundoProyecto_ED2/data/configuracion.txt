@@ -1,1 +1,1 @@
-\\192.168.1.22\BibliotecaServidor
+\\10.202.146.131\LibrosCompartidos
